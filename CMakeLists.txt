@@ -25,6 +25,8 @@ endif()
 find_package(Vulkan REQUIRED)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
+include_directories(${PROJECT_SOURCE_DIR}/include)
+
 add_library(vkCore SHARED source/vkCore.cpp)
 
 set_target_properties(vkCore PROPERTIES COMPILE_DEFINITIONS "VK_CORE_BUILD_DLL")
