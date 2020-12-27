@@ -1,9 +1,12 @@
+#include "external/tinyLogger/tinyLogger.hpp"
 #include "vkCore/Initializers.hpp"
-#include "vkCore/vkCore.hpp"
 
 namespace vkCore
 {
-  auto initFenceUnique( vk::FenceCreateFlags flags ) -> UniqueFence
+  inline vk::Device device = nullptr;
+
+  /// Creates a fence with a unique handle.
+  inline auto initFenceUnique( vk::FenceCreateFlags flags = vk::FenceCreateFlagBits::eSignaled ) -> vk::UniqueFence;
   {
     vk::FenceCreateInfo createInfo( flags );
 
