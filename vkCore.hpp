@@ -1,9 +1,6 @@
 #include <iostream>
 #include <vulkan/vulkan.hpp>
 
-// TODO
-// initDescriptorSetsUnique does not allocate unique descriptor sets.
-
 // Define the following three lines once in any .cpp source file.
 // #define VULKAN_HPP_STORAGE_SHARED
 // #define VULKAN_HPP_STORAGE_SHARED_EXPORT
@@ -60,7 +57,7 @@ namespace vkCore
   /// The size of the vector is determined by global::dataCopies.
   /// @param pool A unique descriptor pool to allocate the sets from.
   /// @param layout The desired unique descriptor set layout.
-  auto initDescriptorSetsUnique( const vk::UniqueDescriptorPool& pool, const vk::UniqueDescriptorSetLayout& layout ) -> std::vector<vk::DescriptorSet>;
+  auto initDescriptorSetsUnique( const vk::UniqueDescriptorPool& pool, const vk::UniqueDescriptorSetLayout& layout ) -> std::vector<vk::UniqueDescriptorSet>;
 
   /// Returns a vector of descriptor sets.
   ///
@@ -155,7 +152,7 @@ namespace vkCore
     return descriptorPool;
   }
 
-  inline auto initDescriptorSetsUnique( const vk::UniqueDescriptorPool& pool, const vk::UniqueDescriptorSetLayout& layout ) -> std::vector<vk::DescriptorSet>
+  inline auto initDescriptorSetsUnique( const vk::UniqueDescriptorPool& pool, const vk::UniqueDescriptorSetLayout& layout ) -> std::vector<vk::UniqueDescriptorSet>
   {
     std::vector<vk::DescriptorSetLayout> layouts( static_cast<size_t>( global::dataCopies ), layout.get( ) );
 
@@ -163,14 +160,14 @@ namespace vkCore
                                                 global::dataCopies,
                                                 layouts.data( ) );
 
-    auto sets = global::device.allocateDescriptorSets( allocateInfo );
+    auto sets = global::device.allocateDescriptorSetsUnique( allocateInfo );
 
-    for ( auto set : sets )
+    for ( const auto& set : sets )
     {
       VK_ASSERT( set, "Failed to create unique descriptor sets." );
     }
 
-    return sets;
+    return std::move( sets );
   }
 
   inline auto initDescriptorSets( const vk::DescriptorPool& pool, const vk::DescriptorSetLayout& layout ) -> std::vector<vk::DescriptorSet>
