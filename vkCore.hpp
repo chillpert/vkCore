@@ -3,7 +3,11 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
+#include <optional>
 #include <vulkan/vulkan.hpp>
+
+// Requires compiler with support for C++17.
 
 // Define the following three lines once in any .cpp source file.
 // #define VULKAN_HPP_STORAGE_SHARED
@@ -17,6 +21,8 @@
     throw std::runtime_error( "vkCore: " #message ); \
   }
 
+#define VK_CORE_THROW( ... ) details::log( true, "vkCore: ", __VA_ARGS__ );
+
 #define VK_CORE_ENABLE_UNIQUE
 
 #define VK_CORE_ASSERT_COMPONENTS
@@ -27,8 +33,33 @@
   #define VK_CORE_ASSERT_DEVICE
 #endif
 
+#define VK_CORE_LOGGING
+
+#ifdef VK_CORE_LOGGING
+  #define VK_CORE_LOG( ... ) details::log( false, "vkCore: ", __VA_ARGS__ )
+#else
+  #define VK_CORE_LOG( ... )
+#endif
+
 namespace vkCore
 {
+  namespace details
+  {
+    template <typename... Args>
+    inline void log( bool error, Args&&... args )
+    {
+      std::stringstream temp;
+      ( temp << ... << args );
+
+      std::cout << temp.str( ) << std::endl;
+
+      if ( error )
+      {
+        throw std::runtime_error( temp.str( ) );
+      }
+    }
+  } // namespace details
+
   namespace global
   {
     inline vk::Instance instance             = nullptr;
@@ -36,6 +67,8 @@ namespace vkCore
     inline vk::Device device                 = nullptr;
     inline vk::SurfaceKHR surface            = nullptr;
     inline uint32_t dataCopies               = 2U;
+    inline uint32_t graphicsFamilyIndex      = 0U;
+    inline uint32_t transferFamilyIndex      = 0U;
     inline vk::PhysicalDeviceLimits physicalDeviceLimits;
   } // namespace global
 
@@ -53,7 +86,7 @@ namespace vkCore
       }
     }
 
-    throw std::runtime_error( "vkCore: Failed to find suitable memory type." );
+    VK_CORE_THROW( "vkCore: Failed to find suitable memory type." );
 
     return 0U;
   }
@@ -81,7 +114,7 @@ namespace vkCore
     }
     else
     {
-      throw std::runtime_error( "vkCore: Failed to retrieve memory requirements for the provided type." );
+      VK_CORE_THROW( "vkCore: Failed to retrieve memory requirements for the provided type." );
     }
 
     return memoryRequirements;
@@ -101,7 +134,7 @@ namespace vkCore
     }
     else
     {
-      throw std::runtime_error( "Failed to process shader path." );
+      VK_CORE_THROW( "Failed to process shader path." );
     }
 
     std::string fileNameOut = fileName + ".spv";
@@ -118,7 +151,7 @@ namespace vkCore
 
     if ( !file.is_open( ) )
     {
-      throw std::runtime_error( "Failed to open shader source file " + pathToShaderSourceFile );
+      VK_CORE_THROW( "Failed to open shader source file ", pathToShaderSourceFile );
     }
 
     size_t fileSize = static_cast<size_t>( file.tellg( ) );
@@ -258,31 +291,217 @@ namespace vkCore
       }
     }
 
+#ifdef VK_CORE_LOGGING
     // Print information about all GPUs available on the machine.
     const std::string_view separator = "===================================================================";
-    std::cout << "Physical device report: "
-              << "\n"
-              << separator << "\n"
-              << "Device name"
+
+    std::cout << "vkCore: Physical device report: "
+              << "\n\n"
+              << separator << "\n "
+              << " Device name "
               << "\t\t\t"
               << "Score" << std::endl
-              << separator << "\n";
+              << separator << "\n ";
 
     for ( const auto& result : results )
     {
       std::cout << std::left << std::setw( 32 ) << std::setfill( ' ' ) << result.second << std::left << std::setw( 32 ) << std::setfill( ' ' ) << result.first << std::endl;
     }
 
+    std::cout << std::endl;
+#endif
+
     VK_CORE_ASSERT( physicalDevice, "No suitable physical device was found." );
 
     // Print information about the GPU that was selected.
     auto properties = physicalDevice.getProperties( );
-    std::cout << "Selected GPU: " << properties.deviceName << std::endl;
+    VK_CORE_LOG( "Selected GPU: ", properties.deviceName );
 
     global::physicalDeviceLimits = properties.limits;
     global::physicalDevice       = physicalDevice;
 
     return physicalDevice;
+  }
+
+  inline void checkInstanceLayersSupport( const std::vector<const char*>& layers )
+  {
+    auto properties = vk::enumerateInstanceLayerProperties( );
+
+    for ( const char* name : layers )
+    {
+      bool found = false;
+      for ( const auto& property : properties )
+      {
+        if ( strcmp( property.layerName, name ) == 0 )
+        {
+          found = true;
+          break;
+        }
+      }
+
+      if ( !found )
+      {
+        VK_CORE_THROW( "Validation layer ", name, " is not available on this device." );
+      }
+
+      VK_CORE_LOG( "Added layer: ", name, "." );
+    }
+  }
+
+  inline uint32_t assessVulkanVersion( uint32_t minVersion )
+  {
+    uint32_t apiVersion = vk::enumerateInstanceVersion( );
+
+#if defined( VK_API_VERSION_1_0 ) && !defined( VK_API_VERSION_1_1 ) && !defined( VK_API_VERSION_1_2 )
+    VK_CORE_LOG( "Found Vulkan SDK API version 1.0." );
+#endif
+
+#if defined( VK_API_VERSION_1_1 ) && !defined( VK_API_VERSION_1_2 )
+    VK_CORE_LOG( "Found Vulkan SDK API version 1.1." );
+#endif
+
+#if defined( VK_API_VERSION_1_2 )
+    VK_CORE_LOG( "Found Vulkan SDK API version 1.2." );
+#endif
+
+    if ( minVersion > apiVersion )
+    {
+      VK_CORE_THROW( "Local Vulkan SDK API version it outdated." );
+    }
+
+    return apiVersion;
+  }
+
+  inline void checkInstanceExtensionsSupport( const std::vector<const char*>& extensions )
+  {
+    auto properties = vk::enumerateInstanceExtensionProperties( );
+
+    for ( const char* name : extensions )
+    {
+      bool found = false;
+      for ( const auto& property : properties )
+      {
+        if ( strcmp( property.extensionName, name ) == 0 )
+        {
+          found = true;
+          break;
+        }
+      }
+
+      if ( !found )
+      {
+        VK_CORE_THROW( "Instance extensions ", std::string( name ), " is not available on this device." )
+      }
+
+      VK_CORE_LOG( "Added instance extension: ", name, "." );
+    }
+  }
+
+  inline void checkDeviceExtensionSupport( const std::vector<const char*>& extensions )
+  {
+    // Stores the name of the extension and a bool that tells if they were found or not.
+    std::map<const char*, bool> requiredExtensions;
+
+    for ( const auto& extension : extensions )
+    {
+      requiredExtensions.emplace( extension, false );
+    }
+
+    std::vector<vk::ExtensionProperties> physicalDeviceExtensions = global::physicalDevice.enumerateDeviceExtensionProperties( );
+
+    // Iterates over all enumerated physical device extensions to see if they are available.
+    for ( const auto& physicalDeviceExtension : physicalDeviceExtensions )
+    {
+      for ( auto& requiredphysicalDeviceExtension : requiredExtensions )
+      {
+        if ( strcmp( physicalDeviceExtension.extensionName, requiredphysicalDeviceExtension.first ) == 0 )
+        {
+          requiredphysicalDeviceExtension.second = true;
+        }
+      }
+    }
+
+    // Give feedback on the previous operations.
+    for ( const auto& requiredphysicalDeviceExtension : requiredExtensions )
+    {
+      if ( !requiredphysicalDeviceExtension.second )
+      {
+        VK_CORE_THROW( "Missing physical device extension: ", requiredphysicalDeviceExtension.first, ". Perhaps you have not installed the NVIDIA Vulkan Beta drivers?" );
+      }
+      else
+      {
+        VK_CORE_LOG( "Added device extension: ", requiredphysicalDeviceExtension.first );
+      }
+    }
+  }
+
+  inline void initQueueFamilyIndices( )
+  {
+    std::optional<uint32_t> graphicsFamilyIndex;
+    std::optional<uint32_t> transferFamilyIndex;
+
+    auto queueFamilyProperties = global::physicalDevice.getQueueFamilyProperties( );
+    std::vector<uint32_t> queueFamilies( queueFamilyProperties.size( ) );
+
+    bool dedicatedTransferQueueFamily = isPhysicalDeviceWithDedicatedTransferQueueFamily( global::physicalDevice );
+
+    for ( uint32_t index = 0; index < static_cast<uint32_t>( queueFamilies.size( ) ); ++index )
+    {
+      if ( queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics && !graphicsFamilyIndex.has_value( ) )
+      {
+        if ( global::physicalDevice.getSurfaceSupportKHR( index, global::surface ) )
+        {
+          graphicsFamilyIndex = index;
+        }
+      }
+
+      if ( dedicatedTransferQueueFamily )
+      {
+        if ( !( queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics ) && !transferFamilyIndex.has_value( ) )
+        {
+          transferFamilyIndex = index;
+        }
+      }
+      else
+      {
+        if ( queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eTransfer && !transferFamilyIndex.has_value( ) )
+        {
+          transferFamilyIndex = index;
+        }
+      }
+    }
+
+    if ( !graphicsFamilyIndex.has_value( ) || !transferFamilyIndex.has_value( ) )
+    {
+      VK_CORE_THROW( "Failed to retrieve queue family indices." );
+    }
+
+    global::graphicsFamilyIndex = graphicsFamilyIndex.value( );
+    global::transferFamilyIndex = transferFamilyIndex.value( );
+  }
+
+  inline std::vector<vk::DeviceQueueCreateInfo> getDeviceQueueCreateInfos( )
+  {
+    std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
+
+    const float queuePriority = 1.0F;
+
+    std::vector<uint32_t> queueFamilyIndices = { global::graphicsFamilyIndex, global::transferFamilyIndex };
+
+    uint32_t index = 0;
+    for ( const auto& queueFamilyIndex : queueFamilyIndices )
+    {
+      vk::DeviceQueueCreateInfo queueCreateInfo( { },              // flags
+                                                 queueFamilyIndex, // queueFamilyIndex
+                                                 1,                // queueCount
+                                                 &queuePriority ); // pQueuePriorties
+
+      queueCreateInfos.push_back( queueCreateInfo );
+
+      ++index;
+    }
+
+    return queueCreateInfos;
   }
 
   // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -423,6 +642,62 @@ namespace vkCore
     return shaderModule;
   }
 
+  inline auto initInstance( const std::vector<const char*>& layers, std::vector<const char*>& extensions, uint32_t minVersion = VK_API_VERSION_1_0 ) -> vk::Instance
+  {
+    vk::DynamicLoader dl;
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>( "vkGetInstanceProcAddr" );
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( vkGetInstanceProcAddr );
+
+    // Check if all extensions and layers needed are available.
+    checkInstanceLayersSupport( layers );
+    checkInstanceExtensionsSupport( extensions );
+
+    // Start creating the instance.
+    vk::ApplicationInfo appInfo;
+    appInfo.apiVersion = assessVulkanVersion( minVersion );
+
+    vk::InstanceCreateInfo createInfo( { },                                         // flags
+                                       &appInfo,                                    // pApplicationInfo
+                                       static_cast<uint32_t>( layers.size( ) ),     // enabledLayerCount
+                                       layers.data( ),                              // ppEnabledLayerNames
+                                       static_cast<uint32_t>( extensions.size( ) ), // enabledExtensionCount
+                                       extensions.data( ) );                        // ppEnabledExtensionNames
+
+    auto instance    = createInstance( createInfo );
+    global::instance = instance;
+    VK_CORE_ASSERT( instance, "Failed to create instance." );
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( instance );
+
+    return instance;
+  }
+
+  inline auto initDevice( std::vector<const char*>& extensions, const std::optional<vk::PhysicalDeviceFeatures>& features, const std::optional<vk::PhysicalDeviceFeatures2>& features2 = { } ) -> vk::Device
+  {
+    checkDeviceExtensionSupport( extensions );
+
+    auto queueCreateInfos = getDeviceQueueCreateInfos( );
+
+    vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
+                                     static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
+                                     queueCreateInfos.data( ),                                                                      // pQueueCreateInfos
+                                     0,                                                                                             // enabledLayerCount
+                                     nullptr,                                                                                       // ppEnabledLayerNames
+                                     static_cast<uint32_t>( extensions.size( ) ),                                                   // enabledExtensionCount
+                                     extensions.data( ),                                                                            // ppEnabledExtensionNames
+                                     features2.has_value( ) ? nullptr : ( features.has_value( ) ? &features.value( ) : nullptr ) ); // pEnabledFeatures - must be NULL because the VkDeviceCreateInfo::pNext chain includes VkPhysicalDeviceFeatures2.
+
+    createInfo.pNext = features2.has_value( ) ? &features2.value( ) : nullptr;
+
+    auto device    = global::physicalDevice.createDevice( createInfo );
+    global::device = device;
+    VK_CORE_ASSERT( device, "Failed to create logical device." );
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( device );
+
+    return device;
+  }
+
   // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 #ifdef VK_CORE_ENABLE_UNIQUE
@@ -560,6 +835,62 @@ namespace vkCore
     VK_CORE_ASSERT( shaderModule, "Failed to create shader module." );
 
     return std::move( shaderModule );
+  }
+
+  inline auto initInstanceUnique( const std::vector<const char*>& layers, std::vector<const char*>& extensions, uint32_t minVersion = VK_API_VERSION_1_0 ) -> vk::UniqueInstance
+  {
+    vk::DynamicLoader dl;
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>( "vkGetInstanceProcAddr" );
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( vkGetInstanceProcAddr );
+
+    // Check if all extensions and layers needed are available.
+    checkInstanceLayersSupport( layers );
+    checkInstanceExtensionsSupport( extensions );
+
+    // Start creating the instance.
+    vk::ApplicationInfo appInfo;
+    appInfo.apiVersion = assessVulkanVersion( minVersion );
+
+    vk::InstanceCreateInfo createInfo( { },                                         // flags
+                                       &appInfo,                                    // pApplicationInfo
+                                       static_cast<uint32_t>( layers.size( ) ),     // enabledLayerCount
+                                       layers.data( ),                              // ppEnabledLayerNames
+                                       static_cast<uint32_t>( extensions.size( ) ), // enabledExtensionCount
+                                       extensions.data( ) );                        // ppEnabledExtensionNames
+
+    auto instance    = createInstanceUnique( createInfo );
+    global::instance = instance.get( );
+    VK_CORE_ASSERT( instance, "Failed to create instance." );
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( instance.get( ) );
+
+    return std::move( instance );
+  }
+
+  inline auto initDeviceUnique( std::vector<const char*>& extensions, const std::optional<vk::PhysicalDeviceFeatures>& features, const std::optional<vk::PhysicalDeviceFeatures2>& features2 = { } ) -> vk::UniqueDevice
+  {
+    checkDeviceExtensionSupport( extensions );
+
+    auto queueCreateInfos = getDeviceQueueCreateInfos( );
+
+    vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
+                                     static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
+                                     queueCreateInfos.data( ),                                                                      // pQueueCreateInfos
+                                     0,                                                                                             // enabledLayerCount
+                                     nullptr,                                                                                       // ppEnabledLayerNames
+                                     static_cast<uint32_t>( extensions.size( ) ),                                                   // enabledExtensionCount
+                                     extensions.data( ),                                                                            // ppEnabledExtensionNames
+                                     features2.has_value( ) ? nullptr : ( features.has_value( ) ? &features.value( ) : nullptr ) ); // pEnabledFeatures - must be NULL because the VkDeviceCreateInfo::pNext chain includes VkPhysicalDeviceFeatures2.
+
+    createInfo.pNext = features2.has_value( ) ? &features2.value( ) : nullptr;
+
+    auto device    = global::physicalDevice.createDeviceUnique( createInfo );
+    global::device = device.get( );
+    VK_CORE_ASSERT( device, "Failed to create logical device." );
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init( device.get( ) );
+
+    return std::move( device );
   }
 
 #endif
