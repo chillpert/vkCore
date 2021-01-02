@@ -73,6 +73,8 @@ namespace vkCore
   } // namespace global
 
   // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  // Utility Functions
+  // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
   inline auto findMemoryType( vk::PhysicalDevice physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties ) -> uint32_t
   {
@@ -504,6 +506,104 @@ namespace vkCore
     return queueCreateInfos;
   }
 
+  inline auto getImageMemoryBarrierInfo( vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, const vk::ImageSubresourceRange* subresourceRange ) -> std::tuple<vk::ImageMemoryBarrier, vk::PipelineStageFlags, vk::PipelineStageFlags>
+  {
+    // TODO: not style conform.
+    vk::ImageMemoryBarrier barrier;
+    barrier.oldLayout           = oldLayout;
+    barrier.newLayout           = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image               = image;
+
+    if ( subresourceRange == nullptr )
+    {
+      barrier.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
+      barrier.subresourceRange.baseMipLevel   = 0;
+      barrier.subresourceRange.levelCount     = 1;
+      barrier.subresourceRange.baseArrayLayer = 0;
+      barrier.subresourceRange.layerCount     = 1;
+    }
+    else
+    {
+      barrier.subresourceRange = *subresourceRange;
+    }
+
+    vk::PipelineStageFlags srcStageMask = vk::PipelineStageFlagBits::eAllCommands;
+    vk::PipelineStageFlags dstStageMask = vk::PipelineStageFlagBits::eAllCommands;
+
+    if ( oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal )
+    {
+      barrier.srcAccessMask = { };
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+      srcStageMask = vk::PipelineStageFlagBits::eTopOfPipe;
+      dstStageMask = vk::PipelineStageFlagBits::eTransfer;
+    }
+    else if ( oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal )
+    {
+      barrier.srcAccessMask = { };
+      barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+      srcStageMask = vk::PipelineStageFlagBits::eTopOfPipe;
+      dstStageMask = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+    }
+    else if ( oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal )
+    {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+      srcStageMask = vk::PipelineStageFlagBits::eTransfer;
+      dstStageMask = vk::PipelineStageFlagBits::eFragmentShader;
+    }
+    else if ( oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eGeneral )
+    {
+      // nothing to do.
+    }
+    else if ( oldLayout == vk::ImageLayout::eGeneral && newLayout == vk::ImageLayout::eTransferSrcOptimal )
+    {
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+    }
+    else if ( oldLayout == vk::ImageLayout::eTransferSrcOptimal && newLayout == vk::ImageLayout::eGeneral )
+    {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+    }
+    else if ( oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::ePresentSrcKHR )
+    {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    }
+    else if ( oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::ePresentSrcKHR )
+    {
+      barrier.srcAccessMask = { };
+    }
+    else if ( oldLayout == vk::ImageLayout::ePresentSrcKHR && newLayout == vk::ImageLayout::eColorAttachmentOptimal )
+    {
+      barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    }
+    else if ( oldLayout == vk::ImageLayout::eColorAttachmentOptimal && newLayout == vk::ImageLayout::ePresentSrcKHR )
+    {
+      barrier.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    }
+    else if ( oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eColorAttachmentOptimal )
+    {
+      barrier.srcAccessMask = { };
+      barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    }
+    else if ( oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eColorAttachmentOptimal )
+    {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    }
+    else
+    {
+      VK_CORE_THROW( "Image layout transition not supported." );
+    }
+
+    return { barrier, srcStageMask, dstStageMask };
+  }
+
+  // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  // Initializer Functions
   // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
   inline auto initFence( vk::FenceCreateFlags flags = vk::FenceCreateFlagBits::eSignaled ) -> vk::Fence
@@ -894,4 +994,112 @@ namespace vkCore
   }
 
 #endif
+
+  // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  // Classes
+  // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+  /// A wrapper class for Vulkan command buffer objects.
+  class CommandBuffer
+  {
+  public:
+    CommandBuffer( ) = default;
+
+    /// Call to init(vk::CommandPool, uint32_t, vk::CommandBufferUsageFlags).
+    CommandBuffer( vk::CommandPool commandPool, uint32_t count = 1, vk::CommandBufferUsageFlags usageFlags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit )
+    {
+      init( commandPool, count, usageFlags );
+    }
+
+    /// Creates the command buffers.
+    /// @param commandPool The command pool from which the command buffers will be allocated from.
+    /// @param count The amount of Vulkan command buffers to initialize (the same as the amount of images in the swapchain).
+    /// @param usageFlags Specifies what the buffer will be used for.
+    void init( vk::CommandPool commandPool, uint32_t count = 1, vk::CommandBufferUsageFlags usageFlags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit )
+    {
+      _commandPool = commandPool;
+
+      _commandBuffers.resize( count );
+
+      vk::CommandBufferAllocateInfo allocateInfo( commandPool,                      // commandPool
+                                                  vk::CommandBufferLevel::ePrimary, // level
+                                                  count );                          // commandBufferCount
+
+      _commandBuffers = global::device.allocateCommandBuffers( allocateInfo );
+      for ( const vk::CommandBuffer& commandBuffer : _commandBuffers )
+      {
+        VK_CORE_ASSERT( commandBuffer, "Failed to create command buffers." );
+      }
+
+      // Set up begin info.
+      _beginInfo.flags = usageFlags;
+    }
+
+    auto get( ) const -> const std::vector<vk::CommandBuffer> { return _commandBuffers; }
+
+    auto get( size_t index ) const -> const vk::CommandBuffer { return _commandBuffers[index]; }
+
+    void free( )
+    {
+      global::device.freeCommandBuffers( _commandPool, static_cast<uint32_t>( _commandBuffers.size( ) ), _commandBuffers.data( ) );
+    }
+
+    void reset( )
+    {
+      for ( vk::CommandBuffer& buffer : _commandBuffers )
+      {
+        buffer.reset( vk::CommandBufferResetFlagBits::eReleaseResources );
+      }
+    }
+
+    /// Used to begin the command buffer recording.
+    /// @param index An index to a command buffer to record to.
+    void begin( size_t index = 0 )
+    {
+      _commandBuffers[index].begin( _beginInfo );
+    }
+
+    /// Used to stop the command buffer recording.
+    /// @param index An index to a command buffer to stop recording.
+    void end( size_t index = 0 )
+    {
+      _commandBuffers[index].end( );
+    }
+
+    /// Submits the recorded commands to a queue.
+    /// @param queue The queue to submit to.
+    /// @param waitSemaphores A std::vector of semaphores to wait for.
+    /// @param signalSemaphores A std::vector of semaphores to signal.
+    /// @param waitDstStageMask The pipeline stage where the commands will be executed.
+    void submitToQueue( vk::Queue queue, vk::Fence fence = nullptr, const std::vector<vk::Semaphore>& waitSemaphores = { }, const std::vector<vk::Semaphore>& signalSemaphores = { }, vk::PipelineStageFlags* waitDstStageMask = { } )
+    {
+      if ( _beginInfo.flags & vk::CommandBufferUsageFlagBits::eOneTimeSubmit )
+      {
+        vk::SubmitInfo submitInfo( static_cast<uint32_t>( waitSemaphores.size( ) ),   // waitSemaphoreCount
+                                   waitSemaphores.data( ),                            // pWaitSemaphores
+                                   waitDstStageMask,                                  // pWaitDstStageMask
+                                   static_cast<uint32_t>( _commandBuffers.size( ) ),  // commandBufferCount
+                                   _commandBuffers.data( ),                           // pCommandBuffers
+                                   static_cast<uint32_t>( signalSemaphores.size( ) ), // signalSemaphoreCount
+                                   signalSemaphores.data( ) );                        // pSignalSemaphores
+
+        if ( queue.submit( 1, &submitInfo, fence ) != vk::Result::eSuccess )
+        {
+          VK_CORE_THROW( "Failed to submit" );
+        }
+
+        queue.waitIdle( );
+      }
+      else
+      {
+        VK_CORE_THROW( "Only command buffers with a usage flag containing eOneTimeSubmit should be submitted automatically" );
+      }
+    }
+
+  private:
+    std::vector<vk::CommandBuffer> _commandBuffers;
+
+    vk::CommandPool _commandPool; ///< The command pool used to allocate the command buffer from.
+    vk::CommandBufferBeginInfo _beginInfo;
+  };
 } // namespace vkCore
