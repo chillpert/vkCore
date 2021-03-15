@@ -1499,7 +1499,7 @@ namespace vkCore
       return *this;
     }
 
-    auto operator=( const Buffer&& ) -> Buffer& = delete;
+    auto operator=( const Buffer && ) -> Buffer& = delete;
 
     auto get( ) const -> const vk::Buffer { return _buffer.get( ); }
 
@@ -1920,6 +1920,7 @@ namespace vkCore
         vk::BufferUsageFlags bufferUsageFlags = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer;
         if ( deviceAddressVisible )
         {
+          // @todo Add vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR for vertex and index buffer
           bufferUsageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
         }
 
@@ -2363,7 +2364,7 @@ namespace vkCore
     Surface( const Surface&& ) = delete;
 
     auto operator=( const Surface& ) -> Surface& = delete;
-    auto operator=( const Surface&& ) -> Surface& = delete;
+    auto operator=( const Surface && ) -> Surface& = delete;
 
     /// @return Returns the surface format.
     auto getFormat( ) const -> vk::Format { return _format; }
@@ -2502,10 +2503,10 @@ namespace vkCore
       createInfo.preTransform    = surfaceCapabilities.currentTransform;
 
       // Prefer opaque bit over any other composite alpha value.
-      createInfo.compositeAlpha = surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque         ? vk::CompositeAlphaFlagBitsKHR::eOpaque :
-                                  surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied  ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
-                                  surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied :
-                                                                                                                                 vk::CompositeAlphaFlagBitsKHR::eInherit;
+      createInfo.compositeAlpha = surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque ? vk::CompositeAlphaFlagBitsKHR::eOpaque :
+                                                                                                                         surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
+                                                                                                                                                                                                                       surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied :
+                                                                                                                                                                                                                                                                                                                      vk::CompositeAlphaFlagBitsKHR::eInherit;
 
       // Handle the swap chain image extent.
       if ( surfaceCapabilities.currentExtent.width != UINT32_MAX )
@@ -2552,7 +2553,7 @@ namespace vkCore
       global::swapchain = _swapchain.get( );
 
       initImages( minImageCount, surface->getFormat( ) );
-      initDepthImage( );
+      initDepthImage( ); // not necessary for the path tracer (refactoring needed)
       initFramebuffers( renderPass );
     }
 
@@ -2662,7 +2663,7 @@ namespace vkCore
       _framebuffers.resize( _imageViews.size( ) );
       for ( size_t i = 0; i < _framebuffers.size( ); ++i )
       {
-        _framebuffers[i] = vkCore::initFramebufferUnique( { _imageViews[i].get( ), _depthImageView.get( ) }, renderPass, _extent );
+        _framebuffers[i] = vkCore::initFramebufferUnique( { _imageViews[i].get( ) }, renderPass, _extent );
       }
     }
 
@@ -2703,7 +2704,7 @@ namespace vkCore
     DebugMessenger( const DebugMessenger&& ) = delete;
 
     auto operator=( const DebugMessenger& ) -> DebugMessenger& = delete;
-    auto operator=( const DebugMessenger&& ) -> DebugMessenger& = delete;
+    auto operator=( const DebugMessenger && ) -> DebugMessenger& = delete;
 
     /// Creates the debug messenger with the given properties.
     /// @param messageSeverity - Specifies the type of severity of messages that will be logged.
