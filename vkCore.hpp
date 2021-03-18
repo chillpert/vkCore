@@ -528,11 +528,9 @@ namespace vkCore
     global::transferFamilyIndex = transferFamilyIndex.value( );
   }
 
-  inline std::vector<vk::DeviceQueueCreateInfo> getDeviceQueueCreateInfos( )
+  inline std::vector<vk::DeviceQueueCreateInfo> getDeviceQueueCreateInfos( float queuePriority = 1.0F )
   {
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-
-    const float queuePriority = 1.0F;
 
     std::vector<uint32_t> queueFamilyIndices = { global::graphicsFamilyIndex, global::transferFamilyIndex };
 
@@ -1023,7 +1021,8 @@ namespace vkCore
   {
     checkDeviceExtensionSupport( extensions );
 
-    auto queueCreateInfos = getDeviceQueueCreateInfos( );
+    float queuePriority = 1.0F;
+    auto queueCreateInfos = getDeviceQueueCreateInfos( queuePriority );
 
     vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
                                      static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
@@ -1218,7 +1217,8 @@ namespace vkCore
   {
     checkDeviceExtensionSupport( extensions );
 
-    auto queueCreateInfos = getDeviceQueueCreateInfos( );
+    float queuePriority = 1.0F;
+    auto queueCreateInfos = getDeviceQueueCreateInfos( queuePriority );
 
     vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
                                      static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
