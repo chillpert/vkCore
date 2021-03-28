@@ -67,6 +67,7 @@ namespace vkCore
     inline uint32_t transferFamilyIndex      = 0U;
     inline uint32_t dataCopies               = 2U;
     inline uint32_t swapchainImageCount      = 0U;
+    inline float queuePriority               = 1.0F;
   } // namespace global
 
   namespace details
@@ -528,7 +529,7 @@ namespace vkCore
     global::transferFamilyIndex = transferFamilyIndex.value( );
   }
 
-  inline std::vector<vk::DeviceQueueCreateInfo> getDeviceQueueCreateInfos( float queuePriority = 1.0F )
+  inline std::vector<vk::DeviceQueueCreateInfo> getDeviceQueueCreateInfos( )
   {
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
@@ -537,10 +538,10 @@ namespace vkCore
     uint32_t index = 0;
     for ( const auto& queueFamilyIndex : queueFamilyIndices )
     {
-      vk::DeviceQueueCreateInfo queueCreateInfo( { },              // flags
-                                                 queueFamilyIndex, // queueFamilyIndex
-                                                 1,                // queueCount
-                                                 &queuePriority ); // pQueuePriorties
+      vk::DeviceQueueCreateInfo queueCreateInfo( { },                      // flags
+                                                 queueFamilyIndex,         // queueFamilyIndex
+                                                 1,                        // queueCount
+                                                 &global::queuePriority ); // pQueuePriorties
 
       queueCreateInfos.push_back( queueCreateInfo );
 
@@ -1021,8 +1022,7 @@ namespace vkCore
   {
     checkDeviceExtensionSupport( extensions );
 
-    float queuePriority = 1.0F;
-    auto queueCreateInfos = getDeviceQueueCreateInfos( queuePriority );
+    auto queueCreateInfos = getDeviceQueueCreateInfos( );
 
     vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
                                      static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
@@ -1217,8 +1217,7 @@ namespace vkCore
   {
     checkDeviceExtensionSupport( extensions );
 
-    float queuePriority = 1.0F;
-    auto queueCreateInfos = getDeviceQueueCreateInfos( queuePriority );
+    auto queueCreateInfos = getDeviceQueueCreateInfos( );
 
     vk::DeviceCreateInfo createInfo( { },                                                                                           // flags
                                      static_cast<uint32_t>( queueCreateInfos.size( ) ),                                             // queueCreateInfoCount
@@ -1499,7 +1498,7 @@ namespace vkCore
       return *this;
     }
 
-    auto operator=( const Buffer && ) -> Buffer& = delete;
+    auto operator=( const Buffer&& ) -> Buffer& = delete;
 
     auto get( ) const -> const vk::Buffer { return _buffer.get( ); }
 
@@ -2364,7 +2363,7 @@ namespace vkCore
     Surface( const Surface&& ) = delete;
 
     auto operator=( const Surface& ) -> Surface& = delete;
-    auto operator=( const Surface && ) -> Surface& = delete;
+    auto operator=( const Surface&& ) -> Surface& = delete;
 
     /// @return Returns the surface format.
     auto getFormat( ) const -> vk::Format { return _format; }
@@ -2503,10 +2502,10 @@ namespace vkCore
       createInfo.preTransform    = surfaceCapabilities.currentTransform;
 
       // Prefer opaque bit over any other composite alpha value.
-      createInfo.compositeAlpha = surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque ? vk::CompositeAlphaFlagBitsKHR::eOpaque :
-                                                                                                                         surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
-                                                                                                                                                                                                                       surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied :
-                                                                                                                                                                                                                                                                                                                      vk::CompositeAlphaFlagBitsKHR::eInherit;
+      createInfo.compositeAlpha = surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque         ? vk::CompositeAlphaFlagBitsKHR::eOpaque :
+                                  surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied  ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
+                                  surfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied :
+                                                                                                                                 vk::CompositeAlphaFlagBitsKHR::eInherit;
 
       // Handle the swap chain image extent.
       if ( surfaceCapabilities.currentExtent.width != UINT32_MAX )
@@ -2704,7 +2703,7 @@ namespace vkCore
     DebugMessenger( const DebugMessenger&& ) = delete;
 
     auto operator=( const DebugMessenger& ) -> DebugMessenger& = delete;
-    auto operator=( const DebugMessenger && ) -> DebugMessenger& = delete;
+    auto operator=( const DebugMessenger&& ) -> DebugMessenger& = delete;
 
     /// Creates the debug messenger with the given properties.
     /// @param messageSeverity - Specifies the type of severity of messages that will be logged.
