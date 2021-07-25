@@ -1919,8 +1919,8 @@ namespace vkCore
         vk::BufferUsageFlags bufferUsageFlags = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer;
         if ( deviceAddressVisible )
         {
-          // @todo Add vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR for vertex and index buffer
-          bufferUsageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
+          // @todo Expose buffer usage flags and remove acceleration structure flag
+          bufferUsageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
         }
 
         _storageBuffers[i].init( _maxSize,                                 // size
