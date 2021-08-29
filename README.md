@@ -8,6 +8,7 @@ A single-header Vulkan framework that aims to simplify common tasks in Vulkan in
 - [ ] Evaluate get*Info functions approach
 - [ ] Remove any Rayex-related hard-coded values
 - [ ] vk::BufferUsageFlags is not exposed
+- [ ] Check every single handle everywhere if a macro is defined
 
 ### Planned Features
 
