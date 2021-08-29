@@ -9,7 +9,8 @@
 #include <vector>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
-#include <stb/stb_image.h>
+#include "stb/stb_image.h"
+
 #include <vulkan/vulkan.hpp>
 
 // Requires compiler with support for C++17.
