@@ -7,10 +7,6 @@
 #include <optional>
 #include <tuple>
 #include <vector>
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_STATIC
-#include "stb/stb_image.h"
-
 #include <vulkan/vulkan.hpp>
 
 // Requires compiler with support for C++17.
@@ -1655,19 +1651,10 @@ namespace vkCore
 
     /// Creates the texture.
     /// @param path The relative path to the texture file.
-    void init( std::string_view path )
+    template <typename T>
+    void init( std::string_view path, const T* data, int width, int height )
     {
       _path = path;
-
-      int width;
-      int height;
-      int channels;
-      stbi_uc* pixels = stbi_load( path.data( ), &width, &height, &channels, STBI_rgb_alpha );
-
-      if ( pixels == nullptr )
-      {
-        VK_CORE_THROW( "Failed to load texture" );
-      }
 
       vk::DeviceSize size = width * height * 4;
 
@@ -1677,9 +1664,7 @@ namespace vkCore
                             { global::graphicsFamilyIndex },
                             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent );
 
-      stagingBuffer.fill<stbi_uc>( pixels );
-
-      stbi_image_free( pixels );
+      stagingBuffer.fill<T>( data );
 
       auto imageCreateInfo = getImageCreateInfo( vk::Extent3D { static_cast<uint32_t>( width ), static_cast<uint32_t>( height ), 1 } );
       Image::init( imageCreateInfo );
